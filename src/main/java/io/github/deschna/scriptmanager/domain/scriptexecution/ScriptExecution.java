@@ -28,8 +28,66 @@ public final class ScriptExecution {
         this.status = ScriptExecutionStatus.PENDING;
     }
 
+    private ScriptExecution(
+            UUID id,
+            String sourceCode,
+            ScriptExecutionStatus status,
+            String stdout,
+            String stderr,
+            String stackTrace,
+            Instant createdAt,
+            Instant startedAt,
+            Instant completedAt
+    ) {
+        if (id == null) {
+            throw new IllegalArgumentException("id must not be null");
+        }
+        if (sourceCode == null || sourceCode.isBlank()) {
+            throw new IllegalArgumentException("sourceCode must not be blank");
+        }
+        if (status == null) {
+            throw new IllegalArgumentException("status must not be null");
+        }
+        if (createdAt == null) {
+            throw new IllegalArgumentException("createdAt must not be null");
+        }
+        this.id = id;
+        this.sourceCode = sourceCode;
+        this.status = status;
+        this.stdout = stdout;
+        this.stderr = stderr;
+        this.stackTrace = stackTrace;
+        this.createdAt = createdAt;
+        this.startedAt = startedAt;
+        this.completedAt = completedAt;
+    }
+
     public static ScriptExecution create(String sourceCode) {
         return new ScriptExecution(sourceCode);
+    }
+
+    public static ScriptExecution restore(
+            UUID id,
+            String sourceCode,
+            ScriptExecutionStatus status,
+            String stdout,
+            String stderr,
+            String stackTrace,
+            Instant createdAt,
+            Instant startedAt,
+            Instant completedAt
+    ) {
+        return new ScriptExecution(
+                id,
+                sourceCode,
+                status,
+                stdout,
+                stderr,
+                stackTrace,
+                createdAt,
+                startedAt,
+                completedAt
+        );
     }
 
     public void start() {
