@@ -9,4 +9,9 @@ public interface ScriptExecutionRepository {
     ScriptExecution save(ScriptExecution scriptExecution);
 
     Optional<ScriptExecution> findById(UUID id);
+
+    ScriptExecutionPage findPage(
+            int pageNumber,
+            int pageSize
+    );
 }

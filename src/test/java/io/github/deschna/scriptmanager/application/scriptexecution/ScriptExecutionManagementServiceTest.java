@@ -1,0 +1,110 @@
+package io.github.deschna.scriptmanager.application.scriptexecution;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class ScriptExecutionManagementServiceTest {
+
+    private static final String SOURCE_CODE = "console.log('hello');";
+
+    @Mock
+    private ScriptExecutionRepository scriptExecutionRepository;
+
+    private ScriptExecutionManagementService scriptExecutionManagementService;
+
+    @BeforeEach
+    void setUp() {
+        scriptExecutionManagementService = new ScriptExecutionManagementService(
+                scriptExecutionRepository
+        );
+    }
+
+    @Test
+    void shouldReturnExecutionById() {
+        ScriptExecution expectedExecution = ScriptExecution.create(SOURCE_CODE);
+
+        when(scriptExecutionRepository.findById(expectedExecution.getId()))
+                .thenReturn(Optional.of(expectedExecution));
+
+        ScriptExecution actualExecution = scriptExecutionManagementService.getById(
+                expectedExecution.getId()
+        );
+
+        assertThat(actualExecution).isSameAs(expectedExecution);
+        verify(scriptExecutionRepository).findById(expectedExecution.getId());
+    }
+
+    @Test
+    void shouldThrowTypedExceptionWhenExecutionIsMissing() {
+        UUID missingExecutionId = UUID.randomUUID();
+
+        when(scriptExecutionRepository.findById(missingExecutionId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> scriptExecutionManagementService.getById(missingExecutionId))
+                .isInstanceOf(ScriptExecutionNotFoundException.class);
+    }
+
+    @Test
+    void shouldRejectNullExecutionId() {
+        assertThatThrownBy(() -> scriptExecutionManagementService.getById(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("executionId must not be null");
+
+        verifyNoInteractions(scriptExecutionRepository);
+    }
+
+    @Test
+    void shouldReturnRequestedPage() {
+        ScriptExecutionPage expectedPage = new ScriptExecutionPage(
+                List.of(
+                        ScriptExecution.create(SOURCE_CODE),
+                        ScriptExecution.create("console.log('bye');")
+                ),
+                1,
+                2,
+                5,
+                3
+        );
+
+        when(scriptExecutionRepository.findPage(1, 2))
+                .thenReturn(expectedPage);
+
+        ScriptExecutionPage actualPage = scriptExecutionManagementService.getPage(1, 2);
+
+        assertThat(actualPage).isEqualTo(expectedPage);
+        verify(scriptExecutionRepository).findPage(1, 2);
+    }
+
+    @Test
+    void shouldRejectNegativePageNumber() {
+        assertThatThrownBy(() -> scriptExecutionManagementService.getPage(-1, 1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("pageNumber must not be negative");
+
+        verifyNoInteractions(scriptExecutionRepository);
+    }
+
+    @Test
+    void shouldRejectNonPositivePageSize() {
+        assertThatThrownBy(() -> scriptExecutionManagementService.getPage(0, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("pageSize must be greater than zero");
+
+        verifyNoInteractions(scriptExecutionRepository);
+    }
+}
