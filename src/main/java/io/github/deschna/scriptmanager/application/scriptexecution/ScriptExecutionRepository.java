@@ -14,4 +14,6 @@ public interface ScriptExecutionRepository {
             int pageNumber,
             int pageSize
     );
+
+    void deleteById(UUID id);
 }

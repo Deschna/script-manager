@@ -99,6 +99,31 @@ class ScriptExecutionTest {
     }
 
     @Test
+    void shouldIdentifyCompletedAndFailedExecutionsAsFinished() {
+        ScriptExecution completedExecution = createExecution();
+        completedExecution.start();
+        completedExecution.complete(STDOUT, null);
+
+        ScriptExecution failedExecution = createExecution();
+        failedExecution.start();
+        failedExecution.fail(null, STDERR, STACK_TRACE);
+
+        assertThat(completedExecution.isFinished()).isTrue();
+        assertThat(failedExecution.isFinished()).isTrue();
+    }
+
+    @Test
+    void shouldIdentifyPendingAndExecutingExecutionsAsNotFinished() {
+        ScriptExecution pendingExecution = createExecution();
+
+        ScriptExecution executingExecution = createExecution();
+        executingExecution.start();
+
+        assertThat(pendingExecution.isFinished()).isFalse();
+        assertThat(executingExecution.isFinished()).isFalse();
+    }
+
+    @Test
     void shouldRejectBlankSourceCode() {
         assertThatThrownBy(() -> ScriptExecution.create(INVALID_SOURCE_CODE))
                 .isInstanceOf(IllegalArgumentException.class);

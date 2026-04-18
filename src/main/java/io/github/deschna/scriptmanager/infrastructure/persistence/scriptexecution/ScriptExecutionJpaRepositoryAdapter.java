@@ -60,4 +60,9 @@ public class ScriptExecutionJpaRepositoryAdapter implements ScriptExecutionRepos
                 page.getTotalPages()
         );
     }
+
+    @Override
+    public void deleteById(UUID id) {
+        scriptExecutionJpaRepository.deleteById(id);
+    }
 }
