@@ -1,11 +1,18 @@
 package io.github.deschna.scriptmanager.domain.scriptexecution;
 
 import java.time.Instant;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 import lombok.Getter;
 
 @Getter
 public final class ScriptExecution {
+
+    private static final Set<ScriptExecutionStatus> TERMINAL_STATUSES = EnumSet.of(
+            ScriptExecutionStatus.COMPLETED,
+            ScriptExecutionStatus.FAILED
+    );
 
     private final UUID id;
     private final String sourceCode;
@@ -115,6 +122,10 @@ public final class ScriptExecution {
         this.stderr = normalizeOutput(stderr);
         this.stackTrace = stackTrace;
         this.completedAt = Instant.now();
+    }
+
+    public boolean isFinished() {
+        return TERMINAL_STATUSES.contains(status);
     }
 
     private void ensureCurrentStatus(ScriptExecutionStatus expectedStatus) {

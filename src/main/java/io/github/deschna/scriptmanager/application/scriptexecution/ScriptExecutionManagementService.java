@@ -28,6 +28,19 @@ public final class ScriptExecutionManagementService {
         return scriptExecutionRepository.findPage(pageNumber, pageSize);
     }
 
+    public void deleteFinished(UUID executionId) {
+        ScriptExecution scriptExecution = getById(executionId);
+
+        if (!scriptExecution.isFinished()) {
+            throw new ScriptExecutionDeletionNotAllowedException(
+                    scriptExecution.getId(),
+                    scriptExecution.getStatus()
+            );
+        }
+
+        scriptExecutionRepository.deleteById(scriptExecution.getId());
+    }
+
     private static void validatePageRequest(
             int pageNumber,
             int pageSize
