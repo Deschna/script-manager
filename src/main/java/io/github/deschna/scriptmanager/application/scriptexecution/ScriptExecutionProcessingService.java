@@ -2,7 +2,9 @@ package io.github.deschna.scriptmanager.application.scriptexecution;
 
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
+@Service
 @RequiredArgsConstructor
 public final class ScriptExecutionProcessingService {
 
