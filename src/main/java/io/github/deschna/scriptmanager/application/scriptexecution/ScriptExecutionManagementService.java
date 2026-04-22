@@ -4,7 +4,9 @@ import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
+@Service
 @RequiredArgsConstructor
 public final class ScriptExecutionManagementService {
 
