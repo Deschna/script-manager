@@ -2,12 +2,14 @@ package io.github.deschna.scriptmanager.application.scriptexecution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
+import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecutionStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,6 +51,7 @@ class ScriptExecutionManagementServiceTest {
         );
 
         assertThat(actualExecution).isSameAs(expectedExecution);
+
         verify(scriptExecutionRepository).findById(expectedExecution.getId());
     }
 
@@ -60,7 +63,10 @@ class ScriptExecutionManagementServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> scriptExecutionManagementService.getById(missingExecutionId))
-                .isInstanceOf(ScriptExecutionNotFoundException.class);
+                .asInstanceOf(type(ScriptExecutionNotFoundException.class))
+                .returns(missingExecutionId, ScriptExecutionNotFoundException::getExecutionId);
+
+        verify(scriptExecutionRepository).findById(missingExecutionId);
     }
 
     @Test
@@ -91,6 +97,7 @@ class ScriptExecutionManagementServiceTest {
         ScriptExecutionPage actualPage = scriptExecutionManagementService.getPage(1, 2);
 
         assertThat(actualPage).isEqualTo(expectedPage);
+
         verify(scriptExecutionRepository).findPage(1, 2);
     }
 
@@ -145,10 +152,17 @@ class ScriptExecutionManagementServiceTest {
         when(scriptExecutionRepository.findById(pendingExecution.getId()))
                 .thenReturn(Optional.of(pendingExecution));
 
-        assertThatThrownBy(() -> scriptExecutionManagementService.deleteFinished(
-                pendingExecution.getId()
-        ))
-                .isInstanceOf(ScriptExecutionDeletionNotAllowedException.class);
+        assertThatThrownBy(() ->
+                scriptExecutionManagementService.deleteFinished(pendingExecution.getId()))
+                .asInstanceOf(type(ScriptExecutionDeletionNotAllowedException.class))
+                .returns(
+                        pendingExecution.getId(),
+                        ScriptExecutionDeletionNotAllowedException::getExecutionId
+                )
+                .returns(
+                        ScriptExecutionStatus.PENDING,
+                        ScriptExecutionDeletionNotAllowedException::getStatus
+                );
 
         verify(scriptExecutionRepository).findById(pendingExecution.getId());
         verify(scriptExecutionRepository, never()).deleteById(pendingExecution.getId());
@@ -161,10 +175,17 @@ class ScriptExecutionManagementServiceTest {
         when(scriptExecutionRepository.findById(executingExecution.getId()))
                 .thenReturn(Optional.of(executingExecution));
 
-        assertThatThrownBy(() -> scriptExecutionManagementService.deleteFinished(
-                executingExecution.getId()
-        ))
-                .isInstanceOf(ScriptExecutionDeletionNotAllowedException.class);
+        assertThatThrownBy(() ->
+                scriptExecutionManagementService.deleteFinished(executingExecution.getId()))
+                .asInstanceOf(type(ScriptExecutionDeletionNotAllowedException.class))
+                .returns(
+                        executingExecution.getId(),
+                        ScriptExecutionDeletionNotAllowedException::getExecutionId
+                )
+                .returns(
+                        ScriptExecutionStatus.EXECUTING,
+                        ScriptExecutionDeletionNotAllowedException::getStatus
+                );
 
         verify(scriptExecutionRepository).findById(executingExecution.getId());
         verify(scriptExecutionRepository, never()).deleteById(executingExecution.getId());
@@ -177,10 +198,10 @@ class ScriptExecutionManagementServiceTest {
         when(scriptExecutionRepository.findById(missingExecutionId))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> scriptExecutionManagementService.deleteFinished(
-                missingExecutionId
-        ))
-                .isInstanceOf(ScriptExecutionNotFoundException.class);
+        assertThatThrownBy(() ->
+                scriptExecutionManagementService.deleteFinished(missingExecutionId))
+                .asInstanceOf(type(ScriptExecutionNotFoundException.class))
+                .returns(missingExecutionId, ScriptExecutionNotFoundException::getExecutionId);
 
         verify(scriptExecutionRepository).findById(missingExecutionId);
         verify(scriptExecutionRepository, never()).deleteById(missingExecutionId);

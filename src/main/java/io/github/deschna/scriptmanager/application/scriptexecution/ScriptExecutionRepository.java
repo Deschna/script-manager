@@ -8,12 +8,12 @@ public interface ScriptExecutionRepository {
 
     ScriptExecution save(ScriptExecution scriptExecution);
 
-    Optional<ScriptExecution> findById(UUID id);
+    Optional<ScriptExecution> findById(UUID executionId);
 
     ScriptExecutionPage findPage(
             int pageNumber,
             int pageSize
     );
 
-    void deleteById(UUID id);
+    void deleteById(UUID executionId);
 }

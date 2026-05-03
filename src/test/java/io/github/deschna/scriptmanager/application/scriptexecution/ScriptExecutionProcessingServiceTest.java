@@ -1,17 +1,19 @@
 package io.github.deschna.scriptmanager.application.scriptexecution;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecutionStatus;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,7 +25,6 @@ class ScriptExecutionProcessingServiceTest {
     private static final String STDOUT = "hello\n";
     private static final String STDERR = "boom";
     private static final String STACK_TRACE = "Error: boom\n    at <js>:1";
-    private static final String INTERNAL_APPLICATION_ERROR_MESSAGE = "Internal application error";
 
     @Mock
     private ScriptExecutionRepository scriptExecutionRepository;
@@ -31,30 +32,21 @@ class ScriptExecutionProcessingServiceTest {
     @Mock
     private ScriptExecutor scriptExecutor;
 
-    private final List<ScriptExecution> savedSnapshots = new ArrayList<>();
-
     private ScriptExecutionProcessingService scriptExecutionProcessingService;
 
     @BeforeEach
     void setUp() {
-        savedSnapshots.clear();
         scriptExecutionProcessingService = new ScriptExecutionProcessingService(
                 scriptExecutionRepository,
                 scriptExecutor
         );
-
-        when(scriptExecutionRepository.save(any(ScriptExecution.class)))
-                .thenAnswer(invocation -> {
-                    ScriptExecution scriptExecution = invocation.getArgument(0);
-                    savedSnapshots.add(snapshotOf(scriptExecution));
-                    return scriptExecution;
-                });
     }
 
     @Test
-    void shouldPersistPendingExecutionBeforeExecutingScriptAndReturnCompletedExecution() {
+    void shouldExecuteScriptAndPersistCompletedExecution() {
+        givenRepositoryReturnsSavedExecution();
         when(scriptExecutor.execute(SOURCE_CODE))
-                .thenReturn(ExecutionResult.success(STDOUT, null));
+                .thenReturn(ExecutionResult.success(STDOUT, ""));
 
         ScriptExecution execution = scriptExecutionProcessingService.execute(SOURCE_CODE);
 
@@ -63,14 +55,15 @@ class ScriptExecutionProcessingServiceTest {
         assertThat(execution.getStderr()).isEmpty();
         assertThat(execution.getStackTrace()).isNull();
 
-        InOrder inOrder = inOrder(scriptExecutionRepository, scriptExecutor);
-        assertExecutionFlow(inOrder, ScriptExecutionStatus.COMPLETED);
+        InOrder inOrder = inOrder(scriptExecutor, scriptExecutionRepository);
+        verifyExecutionFlow(inOrder, ScriptExecutionStatus.COMPLETED);
     }
 
     @Test
     void shouldPersistFailedExecutionWhenExecutorReturnsFailureResult() {
+        givenRepositoryReturnsSavedExecution();
         when(scriptExecutor.execute(SOURCE_CODE))
-                .thenReturn(ExecutionResult.failure(null, STDERR, STACK_TRACE));
+                .thenReturn(ExecutionResult.failure("", STDERR, STACK_TRACE));
 
         ScriptExecution execution = scriptExecutionProcessingService.execute(SOURCE_CODE);
 
@@ -79,50 +72,49 @@ class ScriptExecutionProcessingServiceTest {
         assertThat(execution.getStderr()).isEqualTo(STDERR);
         assertThat(execution.getStackTrace()).isEqualTo(STACK_TRACE);
 
-        InOrder inOrder = inOrder(scriptExecutionRepository, scriptExecutor);
-        assertExecutionFlow(inOrder, ScriptExecutionStatus.FAILED);
+        InOrder inOrder = inOrder(scriptExecutor, scriptExecutionRepository);
+        verifyExecutionFlow(inOrder, ScriptExecutionStatus.FAILED);
     }
 
     @Test
-    void shouldPersistSanitizedFailureWhenExecutorThrowsUnexpectedException() {
+    void shouldNotPersistExecutionWhenExecutorFailsUnexpectedly() {
+        IllegalStateException executorException = new IllegalStateException("Executor failure");
+
         when(scriptExecutor.execute(SOURCE_CODE))
-                .thenThrow(new IllegalStateException("Executor failure"));
+                .thenThrow(executorException);
 
-        ScriptExecution execution = scriptExecutionProcessingService.execute(SOURCE_CODE);
+        assertThatThrownBy(() -> scriptExecutionProcessingService.execute(SOURCE_CODE))
+                .isSameAs(executorException);
 
-        assertThat(execution.getStatus()).isEqualTo(ScriptExecutionStatus.FAILED);
-        assertThat(execution.getStdout()).isEmpty();
-        assertThat(execution.getStderr()).isEqualTo(INTERNAL_APPLICATION_ERROR_MESSAGE);
-        assertThat(execution.getStackTrace()).isNull();
-
-        InOrder inOrder = inOrder(scriptExecutionRepository, scriptExecutor);
-        assertExecutionFlow(inOrder, ScriptExecutionStatus.FAILED);
+        verify(scriptExecutor).execute(SOURCE_CODE);
+        verify(scriptExecutionRepository, never()).save(any(ScriptExecution.class));
     }
 
-    private void assertExecutionFlow(
-            InOrder inOrder,
-            ScriptExecutionStatus expectedFinalStatus
-    ) {
-        inOrder.verify(scriptExecutionRepository).save(any(ScriptExecution.class));
-        inOrder.verify(scriptExecutor).execute(SOURCE_CODE);
-        inOrder.verify(scriptExecutionRepository).save(any(ScriptExecution.class));
+    @Test
+    void shouldNotPersistExecutionWhenExecutorReturnsNull() {
+        when(scriptExecutor.execute(SOURCE_CODE))
+                .thenReturn(null);
 
-        assertThat(savedSnapshots).hasSize(2);
-        assertThat(savedSnapshots.get(0).getStatus()).isEqualTo(ScriptExecutionStatus.PENDING);
-        assertThat(savedSnapshots.get(1).getStatus()).isEqualTo(expectedFinalStatus);
+        assertThatThrownBy(() -> scriptExecutionProcessingService.execute(SOURCE_CODE))
+                .isInstanceOf(NullPointerException.class);
+
+        verify(scriptExecutor).execute(SOURCE_CODE);
+        verify(scriptExecutionRepository, never()).save(any(ScriptExecution.class));
     }
 
-    private static ScriptExecution snapshotOf(ScriptExecution scriptExecution) {
-        return ScriptExecution.restore(
-                scriptExecution.getId(),
-                scriptExecution.getSourceCode(),
-                scriptExecution.getStatus(),
-                scriptExecution.getStdout(),
-                scriptExecution.getStderr(),
-                scriptExecution.getStackTrace(),
-                scriptExecution.getCreatedAt(),
-                scriptExecution.getStartedAt(),
-                scriptExecution.getCompletedAt()
+    private void givenRepositoryReturnsSavedExecution() {
+        when(scriptExecutionRepository.save(any(ScriptExecution.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private void verifyExecutionFlow(InOrder inOrder, ScriptExecutionStatus expectedFinalStatus) {
+        ArgumentCaptor<ScriptExecution> savedExecutionCaptor = ArgumentCaptor.forClass(
+                ScriptExecution.class
         );
+
+        inOrder.verify(scriptExecutor).execute(SOURCE_CODE);
+        inOrder.verify(scriptExecutionRepository).save(savedExecutionCaptor.capture());
+
+        assertThat(savedExecutionCaptor.getValue().getStatus()).isEqualTo(expectedFinalStatus);
     }
 }
