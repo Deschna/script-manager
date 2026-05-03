@@ -2,12 +2,20 @@ package io.github.deschna.scriptmanager.domain.scriptexecution;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.InstanceOfAssertFactories.type;
 
 import java.time.Instant;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ScriptExecutionTest {
 
+    private static final UUID EXECUTION_ID = UUID.fromString(
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    );
+    private static final Instant CREATED_AT = Instant.parse("2026-04-13T10:15:30Z");
+    private static final Instant STARTED_AT = CREATED_AT.plusSeconds(5);
+    private static final Instant COMPLETED_AT = CREATED_AT.plusSeconds(10);
     private static final String SOURCE_CODE = "console.log('hello');";
     private static final String STDOUT = "hello\n";
     private static final String STDERR = "boom";
@@ -29,6 +37,63 @@ class ScriptExecutionTest {
         assertThat(execution.getStdout()).isNull();
         assertThat(execution.getStderr()).isNull();
         assertThat(execution.getStackTrace()).isNull();
+    }
+
+    @Test
+    void shouldRestoreExecution() {
+        ScriptExecution execution = restoreExecution(
+                EXECUTION_ID,
+                SOURCE_CODE,
+                ScriptExecutionStatus.FAILED
+        );
+
+        assertThat(execution.getId()).isEqualTo(EXECUTION_ID);
+        assertThat(execution.getSourceCode()).isEqualTo(SOURCE_CODE);
+        assertThat(execution.getStatus()).isEqualTo(ScriptExecutionStatus.FAILED);
+        assertThat(execution.getStdout()).isEqualTo(STDOUT);
+        assertThat(execution.getStderr()).isEqualTo(STDERR);
+        assertThat(execution.getStackTrace()).isEqualTo(STACK_TRACE);
+        assertThat(execution.getCreatedAt()).isEqualTo(CREATED_AT);
+        assertThat(execution.getStartedAt()).isEqualTo(STARTED_AT);
+        assertThat(execution.getCompletedAt()).isEqualTo(COMPLETED_AT);
+    }
+
+    @Test
+    void shouldRejectRestoreWithoutId() {
+        assertThatThrownBy(() -> restoreExecution(null, SOURCE_CODE, ScriptExecutionStatus.FAILED))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("id must not be null");
+    }
+
+    @Test
+    void shouldRejectRestoreWithoutSourceCode() {
+        assertThatThrownBy(() -> restoreExecution(EXECUTION_ID, null, ScriptExecutionStatus.FAILED))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("sourceCode must not be blank");
+    }
+
+    @Test
+    void shouldRejectRestoreWithoutStatus() {
+        assertThatThrownBy(() -> restoreExecution(EXECUTION_ID, SOURCE_CODE, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("status must not be null");
+    }
+
+    @Test
+    void shouldRejectRestoreWithoutCreatedAt() {
+        assertThatThrownBy(() -> ScriptExecution.restore(
+                EXECUTION_ID,
+                SOURCE_CODE,
+                ScriptExecutionStatus.FAILED,
+                STDOUT,
+                STDERR,
+                STACK_TRACE,
+                null,
+                STARTED_AT,
+                COMPLETED_AT
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("createdAt must not be null");
     }
 
     @Test
@@ -126,16 +191,32 @@ class ScriptExecutionTest {
     @Test
     void shouldRejectBlankSourceCode() {
         assertThatThrownBy(() -> ScriptExecution.create(INVALID_SOURCE_CODE))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("sourceCode must not be blank");
     }
 
     @Test
-    void shouldRejectInvalidTransitionFromPendingToCompleted() {
+    void shouldRejectNullSourceCode() {
+        assertThatThrownBy(() -> ScriptExecution.create(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("sourceCode must not be blank");
+    }
+
+    @Test
+    void shouldRejectInvalidTransitionFromPendingToCompletedWithTransitionDetails() {
         ScriptExecution execution = createExecution();
         assertPendingState(execution);
 
         assertThatThrownBy(() -> execution.complete(STDOUT, null))
-                .isInstanceOf(InvalidScriptExecutionStateTransitionException.class);
+                .asInstanceOf(type(InvalidScriptExecutionStateTransitionException.class))
+                .returns(
+                        ScriptExecutionStatus.PENDING,
+                        InvalidScriptExecutionStateTransitionException::getCurrentStatus
+                )
+                .returns(
+                        ScriptExecutionStatus.EXECUTING,
+                        InvalidScriptExecutionStateTransitionException::getExpectedStatus
+                );
 
         assertPendingState(execution);
     }
@@ -177,6 +258,19 @@ class ScriptExecutionTest {
     }
 
     @Test
+    void shouldRejectInvalidTransitionFromCompletedToCompleted() {
+        ScriptExecution execution = createExecution();
+        execution.start();
+        execution.complete(STDOUT, null);
+        assertCompletedState(execution);
+
+        assertThatThrownBy(() -> execution.complete(STDOUT, null))
+                .isInstanceOf(InvalidScriptExecutionStateTransitionException.class);
+
+        assertCompletedState(execution);
+    }
+
+    @Test
     void shouldRejectInvalidTransitionFromCompletedToFailed() {
         ScriptExecution execution = createExecution();
         execution.start();
@@ -194,12 +288,12 @@ class ScriptExecutionTest {
         ScriptExecution execution = createExecution();
         execution.start();
         execution.fail(null, STDERR, STACK_TRACE);
-        assertFailedState(execution, STACK_TRACE);
+        assertFailedState(execution);
 
         assertThatThrownBy(execution::start)
                 .isInstanceOf(InvalidScriptExecutionStateTransitionException.class);
 
-        assertFailedState(execution, STACK_TRACE);
+        assertFailedState(execution);
     }
 
     @Test
@@ -207,16 +301,47 @@ class ScriptExecutionTest {
         ScriptExecution execution = createExecution();
         execution.start();
         execution.fail(null, STDERR, STACK_TRACE);
-        assertFailedState(execution, STACK_TRACE);
+        assertFailedState(execution);
 
         assertThatThrownBy(() -> execution.complete(STDOUT, null))
                 .isInstanceOf(InvalidScriptExecutionStateTransitionException.class);
 
-        assertFailedState(execution, STACK_TRACE);
+        assertFailedState(execution);
+    }
+
+    @Test
+    void shouldRejectInvalidTransitionFromFailedToFailed() {
+        ScriptExecution execution = createExecution();
+        execution.start();
+        execution.fail(null, STDERR, STACK_TRACE);
+        assertFailedState(execution);
+
+        assertThatThrownBy(() -> execution.fail(null, STDERR, STACK_TRACE))
+                .isInstanceOf(InvalidScriptExecutionStateTransitionException.class);
+
+        assertFailedState(execution);
     }
 
     private static ScriptExecution createExecution() {
         return ScriptExecution.create(SOURCE_CODE);
+    }
+
+    private static ScriptExecution restoreExecution(
+            UUID id,
+            String sourceCode,
+            ScriptExecutionStatus status
+    ) {
+        return ScriptExecution.restore(
+                id,
+                sourceCode,
+                status,
+                STDOUT,
+                STDERR,
+                STACK_TRACE,
+                CREATED_AT,
+                STARTED_AT,
+                COMPLETED_AT
+        );
     }
 
     private static void assertPendingState(ScriptExecution execution) {
@@ -246,12 +371,12 @@ class ScriptExecutionTest {
         assertThat(execution.getStackTrace()).isNull();
     }
 
-    private static void assertFailedState(ScriptExecution execution, String expectedStackTrace) {
+    private static void assertFailedState(ScriptExecution execution) {
         assertThat(execution.getStatus()).isEqualTo(ScriptExecutionStatus.FAILED);
         assertThat(execution.getStartedAt()).isNotNull();
         assertThat(execution.getCompletedAt()).isNotNull();
         assertThat(execution.getStdout()).isEmpty();
         assertThat(execution.getStderr()).isEqualTo(STDERR);
-        assertThat(execution.getStackTrace()).isEqualTo(expectedStackTrace);
+        assertThat(execution.getStackTrace()).isEqualTo(STACK_TRACE);
     }
 }

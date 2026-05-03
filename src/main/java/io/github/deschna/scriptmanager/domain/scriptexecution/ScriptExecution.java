@@ -1,7 +1,6 @@
 package io.github.deschna.scriptmanager.domain.scriptexecution;
 
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.Getter;
@@ -9,7 +8,7 @@ import lombok.Getter;
 @Getter
 public final class ScriptExecution {
 
-    private static final Set<ScriptExecutionStatus> TERMINAL_STATUSES = EnumSet.of(
+    private static final Set<ScriptExecutionStatus> FINISHED_STATUSES = Set.of(
             ScriptExecutionStatus.COMPLETED,
             ScriptExecutionStatus.FAILED
     );
@@ -27,10 +26,7 @@ public final class ScriptExecution {
 
     private ScriptExecution(String sourceCode) {
         this.id = UUID.randomUUID();
-        if (sourceCode == null || sourceCode.isBlank()) {
-            throw new IllegalArgumentException("sourceCode must not be blank");
-        }
-        this.sourceCode = sourceCode;
+        this.sourceCode = requireValidSourceCode(sourceCode);
         this.createdAt = Instant.now();
         this.status = ScriptExecutionStatus.PENDING;
     }
@@ -46,25 +42,13 @@ public final class ScriptExecution {
             Instant startedAt,
             Instant completedAt
     ) {
-        if (id == null) {
-            throw new IllegalArgumentException("id must not be null");
-        }
-        if (sourceCode == null || sourceCode.isBlank()) {
-            throw new IllegalArgumentException("sourceCode must not be blank");
-        }
-        if (status == null) {
-            throw new IllegalArgumentException("status must not be null");
-        }
-        if (createdAt == null) {
-            throw new IllegalArgumentException("createdAt must not be null");
-        }
-        this.id = id;
-        this.sourceCode = sourceCode;
-        this.status = status;
+        this.id = requireNonNull(id, "id");
+        this.sourceCode = requireValidSourceCode(sourceCode);
+        this.createdAt = requireNonNull(createdAt, "createdAt");
+        this.status = requireNonNull(status, "status");
         this.stdout = stdout;
         this.stderr = stderr;
         this.stackTrace = stackTrace;
-        this.createdAt = createdAt;
         this.startedAt = startedAt;
         this.completedAt = completedAt;
     }
@@ -125,7 +109,7 @@ public final class ScriptExecution {
     }
 
     public boolean isFinished() {
-        return TERMINAL_STATUSES.contains(status);
+        return FINISHED_STATUSES.contains(status);
     }
 
     private void ensureCurrentStatus(ScriptExecutionStatus expectedStatus) {
@@ -139,5 +123,19 @@ public final class ScriptExecution {
 
     private static String normalizeOutput(String output) {
         return output == null ? "" : output;
+    }
+
+    private static <T> T requireNonNull(T value, String fieldName) {
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " must not be null");
+        }
+        return value;
+    }
+
+    private static String requireValidSourceCode(String sourceCode) {
+        if (sourceCode == null || sourceCode.isBlank()) {
+            throw new IllegalArgumentException("sourceCode must not be blank");
+        }
+        return sourceCode;
     }
 }
