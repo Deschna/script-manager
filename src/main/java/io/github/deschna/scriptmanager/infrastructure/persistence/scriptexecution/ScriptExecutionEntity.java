@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -16,24 +17,24 @@ import lombok.Setter;
 @Entity
 @Table(name = "script_executions")
 @Getter
-@Setter
-@NoArgsConstructor
+@Setter(AccessLevel.PACKAGE)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ScriptExecutionEntity {
 
     @Id
     private UUID id;
 
-    @Column(name = "source_code", nullable = false)
+    @Column(name = "source_code", nullable = false, columnDefinition = "text")
     private String sourceCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false, length = 32)
     private ScriptExecutionStatus status;
 
-    @Column(columnDefinition = "text")
+    @Column(name = "stdout", columnDefinition = "text")
     private String stdout;
 
-    @Column(columnDefinition = "text")
+    @Column(name = "stderr", columnDefinition = "text")
     private String stderr;
 
     @Column(name = "stack_trace", columnDefinition = "text")
