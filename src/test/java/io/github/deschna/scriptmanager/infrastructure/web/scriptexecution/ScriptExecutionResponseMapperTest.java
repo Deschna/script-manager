@@ -1,6 +1,7 @@
 package io.github.deschna.scriptmanager.infrastructure.web.scriptexecution;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.deschna.scriptmanager.application.scriptexecution.ScriptExecutionPage;
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
@@ -15,12 +16,12 @@ class ScriptExecutionResponseMapperTest {
     private static final UUID EXECUTION_ID = UUID.fromString(
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     );
+    private static final Instant CREATED_AT = Instant.parse("2026-04-13T10:15:30Z");
+    private static final Instant STARTED_AT = CREATED_AT.plusSeconds(5);
+    private static final Instant COMPLETED_AT = CREATED_AT.plusSeconds(10);
     private static final String SOURCE_CODE = "console.log('hello');";
     private static final String STDOUT = "hello\n";
-    private static final String STDERR = "warning\n";
-    private static final Instant CREATED_AT = Instant.parse("2026-04-21T12:00:00Z");
-    private static final Instant STARTED_AT = Instant.parse("2026-04-21T12:00:01Z");
-    private static final Instant COMPLETED_AT = Instant.parse("2026-04-21T12:00:02Z");
+    private static final String STDERR = "boom";
 
     private final ScriptExecutionResponseMapper mapper = new ScriptExecutionResponseMapper();
 
@@ -62,6 +63,20 @@ class ScriptExecutionResponseMapperTest {
         assertThat(response.pageSize()).isEqualTo(20);
         assertThat(response.totalElements()).isEqualTo(1);
         assertThat(response.totalPages()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRejectNullScriptExecution() {
+        assertThatThrownBy(() -> mapper.toResponse(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("scriptExecution must not be null");
+    }
+
+    @Test
+    void shouldRejectNullPage() {
+        assertThatThrownBy(() -> mapper.toPageResponse(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("page must not be null");
     }
 
     private static ScriptExecution createCompletedExecution() {

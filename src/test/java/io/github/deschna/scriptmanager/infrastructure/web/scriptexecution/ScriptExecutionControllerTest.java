@@ -1,8 +1,8 @@
 package io.github.deschna.scriptmanager.infrastructure.web.scriptexecution;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,6 +28,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,11 +37,18 @@ import org.springframework.test.web.servlet.MockMvc;
         GlobalExceptionHandler.class,
         ScriptExecutionResponseMapper.class
 })
+@TestPropertySource(properties = {
+        "logging.level.io.github.deschna.scriptmanager.infrastructure.web.error."
+                + "GlobalExceptionHandler=OFF"
+})
 class ScriptExecutionControllerTest {
 
     private static final UUID EXECUTION_ID = UUID.fromString(
             "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     );
+    private static final Instant CREATED_AT = Instant.parse("2026-04-13T10:15:30Z");
+    private static final Instant STARTED_AT = CREATED_AT.plusSeconds(5);
+    private static final Instant COMPLETED_AT = CREATED_AT.plusSeconds(10);
     private static final String SCRIPT_EXECUTIONS_PATH = "/script-executions";
     private static final String SOURCE_CODE = "console.log('hello');";
     private static final String EXECUTE_SCRIPT_REQUEST_BODY = """
@@ -49,9 +57,8 @@ class ScriptExecutionControllerTest {
             }
             """;
     private static final String STDOUT = "hello\n";
-    private static final Instant CREATED_AT = Instant.parse("2026-04-21T12:00:00Z");
-    private static final Instant STARTED_AT = Instant.parse("2026-04-21T12:00:01Z");
-    private static final Instant COMPLETED_AT = Instant.parse("2026-04-21T12:00:02Z");
+    private static final int DEFAULT_PAGE_NUMBER = 0;
+    private static final int DEFAULT_PAGE_SIZE = 20;
 
     @Autowired
     private MockMvc mockMvc;
@@ -103,14 +110,7 @@ class ScriptExecutionControllerTest {
 
     @Test
     void shouldReturnExecutionPage() throws Exception {
-        ScriptExecution execution = createCompletedExecution();
-        ScriptExecutionPage page = new ScriptExecutionPage(
-                List.of(execution),
-                0,
-                10,
-                1,
-                1
-        );
+        ScriptExecutionPage page = createPage(10);
 
         when(scriptExecutionManagementService.getPage(0, 10))
                 .thenReturn(page);
@@ -129,7 +129,25 @@ class ScriptExecutionControllerTest {
     }
 
     @Test
-    void shouldDeleteFinishedExecution() throws Exception {
+    void shouldReturnExecutionPageWithDefaultRequestParameters() throws Exception {
+        ScriptExecutionPage page = createPage(DEFAULT_PAGE_SIZE);
+
+        when(scriptExecutionManagementService.getPage(DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE))
+                .thenReturn(page);
+
+        mockMvc.perform(get(SCRIPT_EXECUTIONS_PATH))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(EXECUTION_ID.toString()))
+                .andExpect(jsonPath("$.pageNumber").value(DEFAULT_PAGE_NUMBER))
+                .andExpect(jsonPath("$.pageSize").value(DEFAULT_PAGE_SIZE))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
+
+        verify(scriptExecutionManagementService).getPage(DEFAULT_PAGE_NUMBER, DEFAULT_PAGE_SIZE);
+    }
+
+    @Test
+    void shouldReturnNoContentWhenDeletionSucceeds() throws Exception {
         mockMvc.perform(delete(SCRIPT_EXECUTIONS_PATH + "/{executionId}", EXECUTION_ID))
                 .andExpect(status().isNoContent());
 
@@ -145,7 +163,26 @@ class ScriptExecutionControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.title").value("Not Found"))
-                .andExpect(jsonPath("$.detail").value(containsString(EXECUTION_ID.toString())));
+                .andExpect(jsonPath("$.detail").value(
+                        "Script execution not found: " + EXECUTION_ID
+                ));
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenDeletingExecutionThatDoesNotExist() throws Exception {
+        doThrow(new ScriptExecutionNotFoundException(EXECUTION_ID))
+                .when(scriptExecutionManagementService)
+                .deleteFinished(EXECUTION_ID);
+
+        mockMvc.perform(delete(SCRIPT_EXECUTIONS_PATH + "/{executionId}", EXECUTION_ID))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.title").value("Not Found"))
+                .andExpect(jsonPath("$.detail").value(
+                        "Script execution not found: " + EXECUTION_ID
+                ));
+
+        verify(scriptExecutionManagementService).deleteFinished(EXECUTION_ID);
     }
 
     @Test
@@ -161,8 +198,12 @@ class ScriptExecutionControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.title").value("Conflict"))
-                .andExpect(jsonPath("$.detail").value(containsString(EXECUTION_ID.toString())))
-                .andExpect(jsonPath("$.detail").value(containsString("EXECUTING")));
+                .andExpect(jsonPath("$.detail").value(
+                        "Script execution cannot be deleted: "
+                                + EXECUTION_ID
+                                + " has status EXECUTING"
+                                + "; only finished executions can be deleted"
+                ));
     }
 
     @Test
@@ -179,12 +220,32 @@ class ScriptExecutionControllerTest {
                 .andExpect(jsonPath("$.title").value("Bad Request"))
                 .andExpect(jsonPath("$.errors[0].field").value("sourceCode"))
                 .andExpect(jsonPath("$.errors[0].description").value(
-                        containsString("must not be blank")
+                        "sourceCode must not be blank"
                 ));
+
+        verifyNoInteractions(scriptExecutionProcessingService);
     }
 
     @Test
-    void shouldReturnBadRequestWhenRequestParameterValidationFails() throws Exception {
+    void shouldReturnBadRequestWhenSourceCodeExceedsMaximumLength() throws Exception {
+        String oversizedSourceCode = "a".repeat(ExecuteScriptRequest.MAX_SOURCE_CODE_LENGTH + 1);
+
+        mockMvc.perform(post(SCRIPT_EXECUTIONS_PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBodyWithSourceCode(oversizedSourceCode)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.errors[0].field").value("sourceCode"))
+                .andExpect(jsonPath("$.errors[0].description").value(
+                        "sourceCode must not exceed 10 000 characters"
+                ));
+
+        verifyNoInteractions(scriptExecutionProcessingService);
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenPageRequestParameterValidationFails() throws Exception {
         mockMvc.perform(get(SCRIPT_EXECUTIONS_PATH)
                         .param("page", "-1")
                         .param("size", "10"))
@@ -193,8 +254,42 @@ class ScriptExecutionControllerTest {
                 .andExpect(jsonPath("$.title").value("Bad Request"))
                 .andExpect(jsonPath("$.errors[0].field").value("page"))
                 .andExpect(jsonPath("$.errors[0].description").value(
-                        containsString("greater than or equal to 0")
+                        "page must be greater than or equal to 0"
                 ));
+
+        verifyNoInteractions(scriptExecutionManagementService);
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenSizeRequestParameterValidationFails() throws Exception {
+        mockMvc.perform(get(SCRIPT_EXECUTIONS_PATH)
+                        .param("page", "0")
+                        .param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.errors[0].field").value("size"))
+                .andExpect(jsonPath("$.errors[0].description").value(
+                        "size must be greater than or equal to 1"
+                ));
+
+        verifyNoInteractions(scriptExecutionManagementService);
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenSizeRequestParameterExceedsMaximum() throws Exception {
+        mockMvc.perform(get(SCRIPT_EXECUTIONS_PATH)
+                        .param("page", "0")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.errors[0].field").value("size"))
+                .andExpect(jsonPath("$.errors[0].description").value(
+                        "size must be less than or equal to 100"
+                ));
+
+        verifyNoInteractions(scriptExecutionManagementService);
     }
 
     @Test
@@ -203,7 +298,9 @@ class ScriptExecutionControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.title").value("Bad Request"))
-                .andExpect(jsonPath("$.detail").value(containsString("executionId")));
+                .andExpect(jsonPath("$.detail").value("Invalid request value: executionId"));
+
+        verifyNoInteractions(scriptExecutionManagementService);
     }
 
     @Test
@@ -218,7 +315,9 @@ class ScriptExecutionControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.title").value("Bad Request"))
-                .andExpect(jsonPath("$.detail").value(containsString("Request body")));
+                .andExpect(jsonPath("$.detail").value("Request body is malformed or unreadable"));
+
+        verifyNoInteractions(scriptExecutionProcessingService);
     }
 
     @Test
@@ -232,7 +331,7 @@ class ScriptExecutionControllerTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value(500))
                 .andExpect(jsonPath("$.title").value("Internal Server Error"))
-                .andExpect(jsonPath("$.detail").value(containsString("Internal server error")));
+                .andExpect(jsonPath("$.detail").value("Internal server error"));
     }
 
     private static ScriptExecution createCompletedExecution() {
@@ -247,5 +346,23 @@ class ScriptExecutionControllerTest {
                 STARTED_AT,
                 COMPLETED_AT
         );
+    }
+
+    private static ScriptExecutionPage createPage(int pageSize) {
+        return new ScriptExecutionPage(
+                List.of(createCompletedExecution()),
+                0,
+                pageSize,
+                1,
+                1
+        );
+    }
+
+    private static String requestBodyWithSourceCode(String sourceCode) {
+        return """
+                {
+                  "sourceCode": "%s"
+                }
+                """.formatted(sourceCode);
     }
 }

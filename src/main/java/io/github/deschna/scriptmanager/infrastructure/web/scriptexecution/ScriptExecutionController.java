@@ -4,6 +4,7 @@ import io.github.deschna.scriptmanager.application.scriptexecution.ScriptExecuti
 import io.github.deschna.scriptmanager.application.scriptexecution.ScriptExecutionProcessingService;
 import io.github.deschna.scriptmanager.domain.scriptexecution.ScriptExecution;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.net.URI;
 import java.util.UUID;
@@ -26,13 +27,15 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 @Validated
 public class ScriptExecutionController {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final ScriptExecutionProcessingService scriptExecutionProcessingService;
     private final ScriptExecutionManagementService scriptExecutionManagementService;
     private final ScriptExecutionResponseMapper scriptExecutionResponseMapper;
 
     @PostMapping
     public ResponseEntity<ScriptExecutionResponse> execute(
-            @Valid @RequestBody ScriptExecutionRequest request
+            @Valid @RequestBody ExecuteScriptRequest request
     ) {
         ScriptExecution execution = scriptExecutionProcessingService.execute(
                 request.sourceCode()
@@ -57,8 +60,13 @@ public class ScriptExecutionController {
 
     @GetMapping
     public ScriptExecutionPageResponse getPage(
-            @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) int size
+            @RequestParam(defaultValue = "0")
+            @Min(value = 0, message = "page must be greater than or equal to 0")
+            int page,
+            @RequestParam(defaultValue = "20")
+            @Min(value = 1, message = "size must be greater than or equal to 1")
+            @Max(value = MAX_PAGE_SIZE, message = "size must be less than or equal to 100")
+            int size
     ) {
         return scriptExecutionResponseMapper.toPageResponse(
                 scriptExecutionManagementService.getPage(page, size)

@@ -19,8 +19,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
 
-    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
-    private static final String VALIDATION_ERRORS_PROPERTY = "errors";
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String ERRORS_PROPERTY = "errors";
 
     @ExceptionHandler(ScriptExecutionNotFoundException.class)
     public ProblemDetail handleNotFound(ScriptExecutionNotFoundException exception) {
@@ -38,6 +38,7 @@ public final class GlobalExceptionHandler {
                         + exception.getExecutionId()
                         + " has status "
                         + exception.getStatus()
+                        + "; only finished executions can be deleted"
         );
     }
 
@@ -56,7 +57,7 @@ public final class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Validation failure"
         );
-        problemDetail.setProperty(VALIDATION_ERRORS_PROPERTY, errorDetails);
+        problemDetail.setProperty(ERRORS_PROPERTY, errorDetails);
         return problemDetail;
     }
 
@@ -74,7 +75,7 @@ public final class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Validation failure"
         );
-        problemDetail.setProperty(VALIDATION_ERRORS_PROPERTY, errorDetails);
+        problemDetail.setProperty(ERRORS_PROPERTY, errorDetails);
         return problemDetail;
     }
 
@@ -98,7 +99,7 @@ public final class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpectedError(Exception exception) {
-        logger.error("Unhandled exception during request processing", exception);
+        LOGGER.error("Unhandled exception during request processing", exception);
         return ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error"
