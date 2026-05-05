@@ -15,6 +15,7 @@ public final class ScriptExecutionNotFoundException extends RuntimeException {
     }
 
     private static String buildMessage(UUID executionId) {
-        return "Script execution not found: " + Objects.requireNonNull(executionId);
+        return "Script execution not found: "
+                + Objects.requireNonNull(executionId, "executionId must not be null");
     }
 }

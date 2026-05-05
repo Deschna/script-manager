@@ -11,7 +11,7 @@ import org.graalvm.polyglot.SandboxPolicy;
 import org.springframework.stereotype.Component;
 
 @Component
-public class GraalScriptExecutor implements ScriptExecutor {
+public final class GraalScriptExecutor implements ScriptExecutor {
 
     private static final String JAVASCRIPT_LANGUAGE_ID = "js";
 

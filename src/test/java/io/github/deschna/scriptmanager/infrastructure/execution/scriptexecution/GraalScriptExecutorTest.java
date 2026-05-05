@@ -24,12 +24,12 @@ class GraalScriptExecutorTest {
     private final ScriptExecutor scriptExecutor = new GraalScriptExecutor();
 
     @Test
-    void shouldExecuteScriptAndCaptureOutput() {
+    void shouldReturnSuccessAndCaptureOutput() {
         ExecutionResult result = scriptExecutor.execute(SUCCESSFUL_SCRIPT);
 
         assertThat(result.successful()).isTrue();
-        assertThat(result.stdout()).contains("hello");
-        assertThat(result.stderr()).contains("warn");
+        assertThat(result.stdout()).isEqualTo("hello\n");
+        assertThat(result.stderr()).isEqualTo("warn\n");
         assertThat(result.stackTrace()).isNull();
     }
 
@@ -38,8 +38,8 @@ class GraalScriptExecutorTest {
         ExecutionResult result = scriptExecutor.execute(FAILED_SCRIPT);
 
         assertThat(result.successful()).isFalse();
-        assertThat(result.stdout()).contains("before failure");
-        assertThat(result.stderr()).contains("failure warning");
+        assertThat(result.stdout()).isEqualTo("before failure\n");
+        assertThat(result.stderr()).isEqualTo("failure warning\n");
         assertThat(result.stackTrace()).contains("boom");
     }
 
@@ -48,6 +48,8 @@ class GraalScriptExecutorTest {
         ExecutionResult result = scriptExecutor.execute(HOST_ACCESS_SCRIPT);
 
         assertThat(result.successful()).isFalse();
+        assertThat(result.stdout()).isEmpty();
+        assertThat(result.stderr()).isEmpty();
         assertThat(result.stackTrace()).isNotBlank();
     }
 }

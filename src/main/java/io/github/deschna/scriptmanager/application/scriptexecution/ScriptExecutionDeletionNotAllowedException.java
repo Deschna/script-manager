@@ -22,8 +22,8 @@ public final class ScriptExecutionDeletionNotAllowedException extends RuntimeExc
 
     private static String buildMessage(UUID executionId, ScriptExecutionStatus status) {
         return "Script execution cannot be deleted: "
-                + Objects.requireNonNull(executionId)
+                + Objects.requireNonNull(executionId, "executionId must not be null")
                 + " has status "
-                + Objects.requireNonNull(status);
+                + Objects.requireNonNull(status, "status must not be null");
     }
 }

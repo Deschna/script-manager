@@ -13,7 +13,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 @RequiredArgsConstructor
-public class ScriptExecutionJpaRepositoryAdapter implements ScriptExecutionRepository {
+public class ScriptExecutionRepositoryAdapter implements ScriptExecutionRepository {
 
     private static final Sort SCRIPT_EXECUTION_SORT = Sort.by(
             Sort.Order.desc("createdAt"),
@@ -21,20 +21,20 @@ public class ScriptExecutionJpaRepositoryAdapter implements ScriptExecutionRepos
     );
 
     private final ScriptExecutionJpaRepository scriptExecutionJpaRepository;
-    private final ScriptExecutionMapper scriptExecutionMapper;
+    private final ScriptExecutionEntityMapper scriptExecutionEntityMapper;
 
     @Override
     public ScriptExecution save(ScriptExecution scriptExecution) {
         ScriptExecutionEntity savedEntity = scriptExecutionJpaRepository.save(
-                scriptExecutionMapper.toEntity(scriptExecution)
+                scriptExecutionEntityMapper.toEntity(scriptExecution)
         );
-        return scriptExecutionMapper.toDomain(savedEntity);
+        return scriptExecutionEntityMapper.toDomain(savedEntity);
     }
 
     @Override
-    public Optional<ScriptExecution> findById(UUID id) {
-        return scriptExecutionJpaRepository.findById(id)
-                .map(scriptExecutionMapper::toDomain);
+    public Optional<ScriptExecution> findById(UUID executionId) {
+        return scriptExecutionJpaRepository.findById(executionId)
+                .map(scriptExecutionEntityMapper::toDomain);
     }
 
     @Override
@@ -52,7 +52,7 @@ public class ScriptExecutionJpaRepositoryAdapter implements ScriptExecutionRepos
 
         return new ScriptExecutionPage(
                 page.getContent().stream()
-                        .map(scriptExecutionMapper::toDomain)
+                        .map(scriptExecutionEntityMapper::toDomain)
                         .toList(),
                 page.getNumber(),
                 page.getSize(),
@@ -62,7 +62,7 @@ public class ScriptExecutionJpaRepositoryAdapter implements ScriptExecutionRepos
     }
 
     @Override
-    public void deleteById(UUID id) {
-        scriptExecutionJpaRepository.deleteById(id);
+    public void deleteById(UUID executionId) {
+        scriptExecutionJpaRepository.deleteById(executionId);
     }
 }

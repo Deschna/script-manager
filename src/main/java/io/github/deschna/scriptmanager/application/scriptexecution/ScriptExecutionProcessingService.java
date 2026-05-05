@@ -8,23 +8,16 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public final class ScriptExecutionProcessingService {
 
-    private static final String INTERNAL_APPLICATION_ERROR_MESSAGE = "Internal application error";
-
     private final ScriptExecutionRepository scriptExecutionRepository;
     private final ScriptExecutor scriptExecutor;
 
     public ScriptExecution execute(String sourceCode) {
         ScriptExecution scriptExecution = ScriptExecution.create(sourceCode);
-        scriptExecution = scriptExecutionRepository.save(scriptExecution);
 
         scriptExecution.start();
 
-        try {
-            ExecutionResult executionResult = scriptExecutor.execute(sourceCode);
-            applyExecutionResult(scriptExecution, executionResult);
-        } catch (RuntimeException exception) {
-            scriptExecution.fail(null, INTERNAL_APPLICATION_ERROR_MESSAGE, null);
-        }
+        ExecutionResult executionResult = scriptExecutor.execute(sourceCode);
+        applyExecutionResult(scriptExecution, executionResult);
 
         return scriptExecutionRepository.save(scriptExecution);
     }
